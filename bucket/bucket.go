@@ -11,10 +11,10 @@ import (
 
 // Credentials holds the credentials of bucket that needs to be cleared
 type Credentials struct {
-	accessKey  string
-	secretKey  string
-	endpoint   string
-	bucketName string
+	AccessKey  string
+	SecretKey  string
+	Endpoint   string
+	BucketName string
 }
 
 // ClearBucket will delete the objects from your IBM Cloud COS Bucket
@@ -33,9 +33,9 @@ func (c *Credentials) ClearBucket() error {
 	// Create a session with your IBM Cloud Object Storage credentials
 	sess, err := session.NewSession(&aws.Config{
 		Region:           aws.String("us-geo"), // Specify the appropriate region
-		Endpoint:         aws.String(c.endpoint),
+		Endpoint:         aws.String(c.Endpoint),
 		S3ForcePathStyle: aws.Bool(true),
-		Credentials:      credentials.NewStaticCredentials(c.accessKey, c.secretKey, ""),
+		Credentials:      credentials.NewStaticCredentials(c.AccessKey, c.SecretKey, ""),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create session, error : %v", err)
@@ -44,25 +44,32 @@ func (c *Credentials) ClearBucket() error {
 	// Create an S3 service client
 	svc := s3.New(sess)
 
-	// List objects in the bucket
-	listInput := &s3.ListObjectsInput{
-		Bucket: aws.String(c.bucketName),
-	}
-
-	listOutput, err := svc.ListObjects(listInput)
-	if err != nil {
-		fmt.Errorf("failed to list the objects, error : %v", err)
-		return err
-	}
-
-	// Delete each object in the bucket
-	for _, obj := range listOutput.Contents {
-		deleteInput := &s3.DeleteObjectInput{
-			Bucket: aws.String(c.bucketName),
-			Key:    obj.Key,
+	for {
+		// List objects in the bucket
+		listInput := &s3.ListObjectsInput{
+			Bucket: aws.String(c.BucketName),
 		}
-		if _, err = svc.DeleteObject(deleteInput); err != nil {
-			return fmt.Errorf("failed to delete the object, key : %v - error : %v", *obj.Key, err)
+
+		listOutput, err := svc.ListObjects(listInput)
+		if err != nil {
+			fmt.Errorf("failed to list the objects, error : %v", err)
+			return err
+		}
+
+		if len(listOutput.Contents) == 0 {
+			// Bucket is empty, exit the loop
+			break
+		}
+
+		// Delete each object in the bucket
+		for _, obj := range listOutput.Contents {
+			deleteInput := &s3.DeleteObjectInput{
+				Bucket: aws.String(c.BucketName),
+				Key:    obj.Key,
+			}
+			if _, err = svc.DeleteObject(deleteInput); err != nil {
+				return fmt.Errorf("failed to delete the object, key : %v - error : %v", *obj.Key, err)
+			}
 		}
 	}
 
