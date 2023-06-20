@@ -22,7 +22,7 @@ func main() {
 	}
 
 	if err := creds.ClearBucket(); err != nil {
-		fmt.Errorf("failed to clear bucket, err %v: ", err)
+		fmt.Println("failed to clear bucket, err : ", err)
 	}
 
 }
