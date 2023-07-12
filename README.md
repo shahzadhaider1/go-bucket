@@ -2,13 +2,13 @@
 
 A small tool to interact with your S3-compatible Cloud Object Storage and perform various operations. 
 
-# Usage
+## Usage
 
-Here is how you can use this in your code.
+Here is how you can use this in your code:
 
-Create a new file `main.go` and paste the following code in it:
-Run `go mod tidy`
-Run `go run main.go`
+1. Create a new file `main.go` and paste the following code in it
+2. Run `go mod tidy`
+3. Run `go run main.go`
 
 ```
 package main
