@@ -2,6 +2,7 @@ package bucket
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -44,6 +45,12 @@ func (c *Credentials) ClearBucket() error {
 	// Create an S3 service client
 	svc := s3.New(sess)
 
+	// Create a channel to receive deletion errors
+	errCh := make(chan error)
+
+	// Create a wait group to wait for all goroutines to finish
+	var wg sync.WaitGroup
+
 	for {
 		// List objects in the bucket
 		listInput := &s3.ListObjectsInput{
@@ -63,13 +70,30 @@ func (c *Credentials) ClearBucket() error {
 
 		// Delete each object in the bucket
 		for _, obj := range listOutput.Contents {
-			deleteInput := &s3.DeleteObjectInput{
-				Bucket: aws.String(c.BucketName),
-				Key:    obj.Key,
-			}
-			if _, err = svc.DeleteObject(deleteInput); err != nil {
-				return fmt.Errorf("failed to delete the object, key : %v - error : %v", *obj.Key, err)
-			}
+			wg.Add(1)
+			go func(key *string) {
+				defer wg.Done()
+
+				deleteInput := &s3.DeleteObjectInput{
+					Bucket: aws.String(c.BucketName),
+					Key:    key,
+				}
+				_, err := svc.DeleteObject(deleteInput)
+				if err != nil {
+					errCh <- fmt.Errorf("failed to delete the object, key : %v - error : %v", *key, err)
+				}
+			}(obj.Key)
+		}
+
+		// Wait for all deletions to complete
+		wg.Wait()
+
+		// Check if there were any deletion errors
+		select {
+		case err := <-errCh:
+			return err
+		default:
+			// No errors, continue with the next batch of objects
 		}
 	}
 
