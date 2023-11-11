@@ -16,6 +16,18 @@ type Credentials struct {
 	SecretKey  string
 	Endpoint   string
 	BucketName string
+	Region     string
+}
+
+// NewS3Client initialises a new S3 client
+func (c *Credentials) NewS3Client(accessKey, secretKey, endpoint, bucketName, region string) *Credentials {
+	return &Credentials{
+		AccessKey:  accessKey,
+		SecretKey:  secretKey,
+		Endpoint:   endpoint,
+		BucketName: bucketName,
+		Region:     region,
+	}
 }
 
 // ClearBucket will delete the objects from your IBM Cloud COS Bucket
@@ -33,7 +45,7 @@ type Credentials struct {
 func (c *Credentials) ClearBucket() error {
 	// Create a session with your IBM Cloud Object Storage credentials
 	sess, err := session.NewSession(&aws.Config{
-		Region:           aws.String("us-geo"), // Specify the appropriate region
+		Region:           aws.String(c.Region), // Specify the appropriate region
 		Endpoint:         aws.String(c.Endpoint),
 		S3ForcePathStyle: aws.Bool(true),
 		Credentials:      credentials.NewStaticCredentials(c.AccessKey, c.SecretKey, ""),
@@ -95,6 +107,73 @@ func (c *Credentials) ClearBucket() error {
 		default:
 			// No errors, continue with the next batch of objects
 		}
+	}
+
+	return nil
+}
+
+// ListObjects lists all the objects available in the COS Bucket
+//
+// Parameters:
+//
+//	accessKey: The access key for authentication.
+//	secretKey: The secret key for authentication.
+//	endpoint: The endpoint URL of the bucket.
+//	bucketName: The name of the bucket to clear.
+//
+// Returns:
+//
+//	An error if the listing process encounters any issues, or nil if successful.
+func (c *Credentials) ListObjects() error {
+	// Create a session
+	sess, err := session.NewSession(&aws.Config{
+		Region:           aws.String(c.Region), // Replace with your region
+		Endpoint:         aws.String(c.Endpoint),
+		S3ForcePathStyle: aws.Bool(true),
+		Credentials:      credentials.NewStaticCredentials(c.AccessKey, c.SecretKey, ""),
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	// Create an S3 client
+	svc := s3.New(sess)
+
+	// Create a channel to receive deletion errors
+	errCh := make(chan error)
+
+	// Create a wait group to wait for all goroutines to finish
+	var wg sync.WaitGroup
+
+	for {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			// List objects in the bucket
+			resp, err := svc.ListObjects(&s3.ListObjectsInput{
+				Bucket: aws.String(c.BucketName),
+			})
+
+			if err != nil {
+				panic(err)
+			}
+
+			// Iterate through the objects and print their names
+			for _, obj := range resp.Contents {
+				fmt.Println("Object Name:", *obj.Key)
+			}
+		}()
+	}
+
+	// Wait for all deletions to complete
+	wg.Wait()
+
+	// Check if there were any deletion errors
+	select {
+	case err = <-errCh:
+		return err
+	default:
+		// No errors, continue with the next batch of objects
 	}
 
 	return nil
